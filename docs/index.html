@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Force Touch Tracker</title>
+  <meta name="description" content="Live 10-level Force Touch pressure tracker for MacBook trackpads. Open in Safari on a Force Touch Mac.">
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='12' width='4' height='8' rx='1' fill='%2334d399'/%3E%3Crect x='8' y='12' width='4' height='8' rx='1' fill='%2384cc16'/%3E%3Crect x='14' y='12' width='4' height='8' rx='1' fill='%23facc15'/%3E%3Crect x='20' y='12' width='4' height='8' rx='1' fill='%23fb923c'/%3E%3Crect x='26' y='12' width='4' height='8' rx='1' fill='%23ef4444'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="wrap top">
+    <div>
+      <h1>Force Touch Tracker</h1>
+      <p class="lede">Ten discrete force levels from your MacBook's Force Touch trackpad. Click the pad and press harder.</p>
+    </div>
+    <span id="source-badge" class="badge" data-state="none">Detecting input…</span>
+  </header>
+
+  <main class="wrap">
+    <section class="card stage" aria-label="Live pressure">
+      <div class="readouts">
+        <div class="metric metric-level">
+          <span class="label">Level</span>
+          <span class="value"><output id="level">0</output><small id="level-count">/ 10</small></span>
+        </div>
+        <div class="metric"><span class="label">Raw</span><output id="raw" class="value">0.000</output></div>
+        <div class="metric"><span class="label">Normalized</span><output id="normalized" class="value">0.000</output></div>
+        <div class="metric"><span class="label">Stage</span><output id="stage" class="value">0</output></div>
+        <div class="metric"><span class="label">Peak</span><output id="peak" class="value">0</output></div>
+        <div class="metric"><span class="label">Event → frame</span><span class="value"><output id="latency">–</output><small>ms</small></span></div>
+      </div>
+
+      <div class="loaders">
+        <div id="bar" class="bar" role="meter" aria-label="Force level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"></div>
+        <svg id="ring" class="ring" viewBox="0 0 200 200" aria-hidden="true">
+          <g id="ring-segments"></g>
+          <text id="ring-label" x="100" y="112" text-anchor="middle">0</text>
+        </svg>
+      </div>
+
+      <div id="pad" class="pad" tabindex="0" role="button" aria-describedby="pad-hint">
+        <div class="pad-text">
+          <strong id="pad-title">Click and hold here, then press harder</strong>
+          <span id="pad-hint">No Force Touch? Hold the mouse button or <kbd>Space</kbd> to ramp up simulated pressure.</span>
+        </div>
+      </div>
+
+      <canvas id="history" class="history" height="120" aria-label="Pressure history"></canvas>
+    </section>
+
+    <aside class="card settings" aria-label="Settings">
+      <h2>Tuning</h2>
+
+      <label class="field">
+        <span>Response curve</span>
+        <select id="curve">
+          <option value="linear">Linear</option>
+          <option value="exponential">Exponential: more control at the top</option>
+          <option value="logarithmic">Logarithmic: light presses go further</option>
+        </select>
+      </label>
+
+      <label class="field range">
+        <span>Curve strength <output for="strength" id="strength-out">3.0</output></span>
+        <input id="strength" type="range" min="0.5" max="8" step="0.1" value="3">
+      </label>
+
+      <label class="field range">
+        <span>Deadzone <output id="deadzone-out">0.05</output></span>
+        <input id="deadzone" type="range" min="0" max="0.2" step="0.01" value="0.05">
+      </label>
+
+      <label class="field range">
+        <span>Hysteresis <output id="hysteresis-out">0.02</output></span>
+        <input id="hysteresis" type="range" min="0" max="0.08" step="0.005" value="0.02">
+      </label>
+
+      <div class="field">
+        <span>Calibration: full force = raw <output id="calibration-out">1.00</output></span>
+        <div class="buttons">
+          <button id="calibrate" type="button">Calibrate (4 s)</button>
+          <button id="calibration-reset" type="button" class="ghost">Reset</button>
+        </div>
+      </div>
+
+      <h2>Feedback</h2>
+      <label class="toggle"><input id="sound" type="checkbox"> Audio tick per level</label>
+      <label class="toggle"><input id="vibrate" type="checkbox" checked> Vibrate where supported</label>
+      <p class="note">Browsers can't drive the Mac's Taptic Engine. For real haptics per level, run the native harness below.</p>
+
+      <h2>Manual input</h2>
+      <label class="field range">
+        <span>Simulated pressure <output id="manual-out">0.00</output></span>
+        <input id="manual" type="range" min="0" max="1" step="0.005" value="0">
+      </label>
+      <button id="clear-peak" type="button" class="ghost">Clear peak</button>
+    </aside>
+
+    <section class="card info">
+      <h2>Level bands</h2>
+      <p>Pressure is calibrated, shaped by the response curve, then split into bands. Raw is the trackpad pressure needed to reach each level with the current settings.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Level</th><th>Normalized</th><th>Raw needed</th></tr></thead>
+          <tbody id="bands"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card info">
+      <h2>How it works</h2>
+      <ol class="pipeline">
+        <li><strong>Capture.</strong> Safari exposes trackpad force as <code>webkitForce</code> (1 = click, 2 = force click, 3 = max). The native app reads <code>NSEvent.pressure</code> and <code>stage</code>.</li>
+        <li><strong>Join stages.</strong> Both are mapped to one continuous 0–1 range: click covers 0–0.5 and force click covers 0.5–1, so the value doesn't drop back to zero at the force click.</li>
+        <li><strong>Quantize.</strong> Calibration, curve and deadzone, then 10 bands. Rising pressure changes level immediately; falling pressure has to clear the hysteresis margin first.</li>
+        <li><strong>Feedback.</strong> Each level change plays an <code>NSHapticFeedbackManager</code> pulse natively. Here it's a visual pulse, plus optional sound or vibration.</li>
+      </ol>
+      <p class="note">Browser support: live Force Touch input works in <strong>Safari on a Mac with a Force Touch trackpad</strong>. Pens and some touchscreens report pressure through Pointer Events. Everything else can use the simulated input.</p>
+    </section>
+
+    <section class="card info">
+      <h2>Native macOS harness</h2>
+      <p>The Swift package <code>ForceTouchKit</code> includes the quantizer, calibrator, haptics and an <code>NSView</code> tracker, plus a SwiftUI test app that plays real haptics at each level.</p>
+<pre><code>git clone https://github.com/oshal7/MacBook-Force-Touch.git
+cd MacBook-Force-Touch
+swift run ForceTouchHarness</code></pre>
+      <p>Requires macOS 11+ and Xcode 15+. To use the library in your own app, add the package and drop in a <code>PressureTrackerView</code>:</p>
+<pre><code>let tracker = PressureTrackerView()
+tracker.onReading = { reading in
+    print(reading.level, reading.raw) // 0–10, 0.0–1.0
+}</code></pre>
+      <p><a href="https://github.com/oshal7/MacBook-Force-Touch">Source on GitHub →</a></p>
+    </section>
+  </main>
+
+  <footer class="wrap foot">ForceTouchKit · 10-level Force Touch tracker</footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
