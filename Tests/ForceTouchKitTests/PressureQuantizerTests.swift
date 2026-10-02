@@ -128,7 +128,8 @@ final class PressureQuantizerTests: XCTestCase {
         _ = hard.advance(pressure: 0.3, isHeld: true, dt: 1)
         XCTAssertGreaterThan(hard.value, light.value)
         // Depth never falls below the current pressure.
-        XCTAssertEqual(HoldCharge().advance(pressure: 0.8, isHeld: true, dt: 0), 0.8, accuracy: 1e-9)
+        var fresh = HoldCharge()
+        XCTAssertEqual(fresh.advance(pressure: 0.8, isHeld: true, dt: 0), 0.8, accuracy: 1e-9)
         XCTAssertEqual(hard.advance(pressure: 0.3, isHeld: false, dt: 1), 0)
         XCTAssertEqual(hard.value, 0)
     }
