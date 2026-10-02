@@ -17,6 +17,10 @@ struct ForcePad: NSViewRepresentable {
     func updateNSView(_ view: PressureTrackerView, context: Context) {
         view.quantizer.configuration = model.configuration
         view.inputMapping = model.pressureMode.mapping
+        view.holdCharge.secondsToFull = model.secondsToFull
+        if view.depthMode != model.depthMode {
+            view.depthMode = model.depthMode
+        }
         if view.pressureBehavior != model.pressureMode.behavior {
             view.pressureBehavior = model.pressureMode.behavior
         }

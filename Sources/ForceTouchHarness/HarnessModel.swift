@@ -49,11 +49,42 @@ final class HarnessModel: ObservableObject {
     @Published var hapticProfile = HapticProfileChoice.escalating {
         didSet { haptics.profile = hapticProfile.profile }
     }
+    @Published var rumbleEnabled = true { didSet { haptics.rumbleEnabled = rumbleEnabled } }
+
+    @Published var depthMode = PressureTrackerView.DepthMode.holdToCharge
+    @Published var secondsToFull: Double = 3
+
+    /// Most recent detents and failures, newest first.
+    @Published private(set) var hapticLog: [String] = []
+    @Published private(set) var rumblePulses = 0
+    @Published private(set) var actuatorFailures = 0
 
     @Published private(set) var isCalibrating = false
     @Published private(set) var calibrationSecondsLeft = 0
 
     let haptics = LevelHaptics()
+
+    init() {
+        haptics.onEvent = { [weak self] event in self?.record(event) }
+    }
+
+    private func record(_ event: HapticEvent) {
+        if !event.actuatorAccepted { actuatorFailures += 1 }
+        if event.kind == .rumble && event.actuatorAccepted {
+            rumblePulses += 1
+            return
+        }
+        let engine = event.engine == .trackpadActuator ? "actuator" : "AppKit"
+        let status = event.actuatorAccepted ? "" : " (actuator rejected it)"
+        hapticLog.insert("L\(event.level)  \(event.kind.rawValue)  \(event.waveform)  via \(engine)\(status)", at: 0)
+        if hapticLog.count > 8 { hapticLog.removeLast(hapticLog.count - 8) }
+    }
+
+    func clearHapticLog() {
+        hapticLog = []
+        rumblePulses = 0
+        actuatorFailures = 0
+    }
 
     private var calibrator = PressureCalibrator()
     private var calibrationTimer: Timer?

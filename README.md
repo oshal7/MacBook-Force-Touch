@@ -90,6 +90,15 @@ Trackpad ─► NSEvent (pressure, stage) ─► ForceInputMapping ─► Pressu
    | 9     | Triple strong tap |
    | 10    | Buzz |
 
+   While a level is held, a repeating pulse keeps playing. It gets faster and
+   stronger with depth: light taps about every 0.36 s at level 1, up to strong
+   taps every 0.07 s at level 10.
+
+   **Hold to go deeper** (`PressureTrackerView.DepthMode.holdToCharge`, the
+   harness default): depth also builds up over time while the click is held
+   (`HoldCharge`), so one continuous hold walks through levels 1→10 (3 s by
+   default; pressing harder gets there faster).
+
    By default it drives the trackpad actuator directly through the private
    `MultitouchSupport` framework (`MultitouchActuator`, the approach
    HapticKey uses). `NSHapticFeedbackManager` only has three patterns and

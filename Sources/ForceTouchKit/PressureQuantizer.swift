@@ -131,8 +131,14 @@ public struct PressureQuantizer {
     /// Processes one raw pressure sample and updates `currentLevel`.
     @discardableResult
     public mutating func process(_ raw: Double, stage: Int = 1, timestamp: TimeInterval = 0) -> PressureReading {
+        process(raw: raw, normalized: normalize(raw), stage: stage, timestamp: timestamp)
+    }
+
+    /// Like `process(_:stage:timestamp:)`, but with an already-normalized
+    /// depth, e.g. one built up over time by `HoldCharge`.
+    @discardableResult
+    public mutating func process(raw: Double, normalized: Double, stage: Int = 1, timestamp: TimeInterval = 0) -> PressureReading {
         let previous = currentLevel
-        let normalized = normalize(raw)
         var level = level(forNormalized: normalized)
 
         if raw <= 0 || stage == 0 {

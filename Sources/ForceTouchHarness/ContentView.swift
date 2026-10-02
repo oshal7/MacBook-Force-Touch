@@ -9,6 +9,16 @@ struct ContentView: View {
     /// Shows the haptic preview on the loader while it plays.
     private var displayLevel: Int { max(model.reading.level, model.previewLevel) }
 
+    private var padTitle: String {
+        if model.isCalibrating {
+            return "Calibrating: press as hard as is comfortable… \(model.calibrationSecondsLeft)s"
+        }
+        switch model.depthMode {
+        case .holdToCharge: return "Click and keep holding. It goes deeper over time"
+        case .pressure: return "Click and hold here, then press harder"
+        }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             VStack(spacing: 20) {
@@ -57,9 +67,7 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.15), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
             VStack(spacing: 6) {
-                Text(model.isCalibrating
-                     ? "Calibrating: press as hard as is comfortable… \(model.calibrationSecondsLeft)s"
-                     : "Click and hold here, then press harder")
+                Text(padTitle)
                     .font(.headline)
                 Text("Each new level plays a haptic. Lift your finger to reset.")
                     .font(.caption)
@@ -117,6 +125,19 @@ private struct SettingsPanel: View {
                 LabeledSlider(title: "Hysteresis", value: $model.configuration.hysteresis, range: 0...0.08)
             }
 
+            Section(header: Text("Depth")) {
+                Picker("Mode", selection: $model.depthMode) {
+                    Text("Hold to go deeper").tag(PressureTrackerView.DepthMode.holdToCharge)
+                    Text("Pressure only").tag(PressureTrackerView.DepthMode.pressure)
+                }
+                if model.depthMode == .holdToCharge {
+                    LabeledSlider(title: "Seconds to level 10", value: $model.secondsToFull, range: 1...8)
+                    Text("Keep holding to step through the levels. Pressing harder gets there faster.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             Section(header: Text("Input")) {
                 Picker("Click", selection: $model.pressureMode) {
                     Text("Click + force click").tag(PressureMode.twoStage)
@@ -132,6 +153,7 @@ private struct SettingsPanel: View {
             Section(header: Text("Haptics")) {
                 Toggle("Haptic per level", isOn: $model.hapticsEnabled)
                 Toggle("Haptic on step down", isOn: $model.hapticsOnRelease)
+                Toggle("Pulse while held (faster when deeper)", isOn: $model.rumbleEnabled)
                 Picker("Engine", selection: $model.hapticEngine) {
                     Text("Trackpad actuator").tag(LevelHaptics.Engine.trackpadActuator)
                     Text("AppKit").tag(LevelHaptics.Engine.appKit)
@@ -152,6 +174,16 @@ private struct SettingsPanel: View {
                 Text("Rest a finger on the trackpad while the preview plays.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            Section(header: Text("Haptic log")) {
+                Text("Pulses while held: \(model.rumblePulses)   Actuator failures: \(model.actuatorFailures)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(model.actuatorFailures > 0 ? .orange : .secondary)
+                ForEach(Array(model.hapticLog.enumerated()), id: \.offset) { _, line in
+                    Text(line).font(.system(.caption, design: .monospaced))
+                }
+                Button("Clear log") { model.clearHapticLog() }
             }
 
             Section(header: Text("Calibration")) {

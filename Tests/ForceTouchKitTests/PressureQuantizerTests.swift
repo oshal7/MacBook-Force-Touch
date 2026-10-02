@@ -108,6 +108,31 @@ final class PressureQuantizerTests: XCTestCase {
         XCTAssertEqual(profile.pulses(forLevel: 20, levelCount: 20), profile.pulses[9])
     }
 
+    func testHoldChargeWalksThroughEveryLevelInOneHold() {
+        var charge = HoldCharge(secondsToFull: 3, pressureBoost: 2)
+        var q = PressureQuantizer()
+        var seen: [Int] = []
+        // Light, steady click held for 3.5 s at 120 Hz.
+        for _ in 0..<420 {
+            let depth = charge.advance(pressure: 0.06, isHeld: true, dt: 1.0 / 120)
+            let level = q.process(raw: 0.06, normalized: depth).level
+            if seen.last != level { seen.append(level) }
+        }
+        XCTAssertEqual(seen, Array(1...10))
+    }
+
+    func testHoldChargeIsFasterWhenPressingHarderAndResetsOnRelease() {
+        var light = HoldCharge(secondsToFull: 3, pressureBoost: 2)
+        var hard = light
+        _ = light.advance(pressure: 0.1, isHeld: true, dt: 1)
+        _ = hard.advance(pressure: 0.3, isHeld: true, dt: 1)
+        XCTAssertGreaterThan(hard.value, light.value)
+        // Depth never falls below the current pressure.
+        XCTAssertEqual(HoldCharge().advance(pressure: 0.8, isHeld: true, dt: 0), 0.8, accuracy: 1e-9)
+        XCTAssertEqual(hard.advance(pressure: 0.3, isHeld: false, dt: 1), 0)
+        XCTAssertEqual(hard.value, 0)
+    }
+
     func testConfigurationIsSanitized() {
         var q = PressureQuantizer()
         q.configuration.deadzone = -1
