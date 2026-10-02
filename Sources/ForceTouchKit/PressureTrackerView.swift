@@ -10,13 +10,15 @@ import AppKit
 open class PressureTrackerView: NSView {
     public var quantizer = PressureQuantizer()
     public var inputMapping: ForceInputMapping = .stageCombined
-    public let haptics = LevelHaptics()
+    public var haptics = LevelHaptics()
 
     /// Called for every processed pressure sample.
     public var onReading: (@MainActor (PressureReading) -> Void)?
 
     /// AppKit pressure behavior for clicks in this view. `.primaryDefault`
     /// gives a two-stage click / force click, which pairs with `.stageCombined`.
+    /// `.primaryClick` has a single stage, so macOS shouldn't play its own
+    /// force-click haptic over the level haptics; pair it with `.raw`.
     public var pressureBehavior: NSEvent.PressureBehavior = .primaryDefault {
         didSet { applyPressureConfiguration() }
     }

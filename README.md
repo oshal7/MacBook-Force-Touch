@@ -80,8 +80,25 @@ Trackpad ─► NSEvent (pressure, stage) ─► ForceInputMapping ─► Pressu
    Rising pressure changes level immediately, with no added latency. Falling
    pressure has to drop `hysteresis` below the band before the level goes down,
    so the level doesn't flicker on a boundary.
-4. **Haptics.** `LevelHaptics` plays `.alignment` on each step up and
-   `.levelChange` at the top level. Steps down can optionally play `.generic`.
+4. **Haptics.** `LevelHaptics` plays a different haptic on entering each
+   level (`LevelHapticProfile.escalating`):
+
+   | Level | Haptic |
+   |-------|--------|
+   | 1–5   | One pulse each, getting stronger: light tap, weak click, medium tap, strong tap, strong click |
+   | 6–8   | Double pulses: medium, strong tap, strong click |
+   | 9     | Triple strong tap |
+   | 10    | Buzz |
+
+   By default it drives the trackpad actuator directly through the private
+   `MultitouchSupport` framework (`MultitouchActuator`, the approach
+   HapticKey uses). `NSHapticFeedbackManager` only has three patterns and
+   tends to drop pulses during a click or force click. If the actuator can't
+   be opened, it falls back to AppKit. The private API is fine for local
+   tools but won't pass Mac App Store review.
+
+   The browser can't drive the Taptic Engine at all. In the web demo, the
+   only bumps you feel are macOS's own click and force click.
 
 ### Tuning
 

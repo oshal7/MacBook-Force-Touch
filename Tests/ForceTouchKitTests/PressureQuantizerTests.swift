@@ -91,6 +91,23 @@ final class PressureQuantizerTests: XCTestCase {
         XCTAssertEqual(c.recommendedCalibrationMax ?? 0, 0.2, accuracy: 1e-9)
     }
 
+    func testEscalatingProfileHasDistinctHapticForEveryLevel() {
+        let profile = LevelHapticProfile.escalating
+        let all = (1...10).map { profile.pulses(forLevel: $0, levelCount: 10) }
+        XCTAssertTrue(all.allSatisfy { !$0.isEmpty })
+        for i in 1..<all.count {
+            XCTAssertNotEqual(all[i], all[i - 1], "levels \(i) and \(i + 1) feel the same")
+        }
+        XCTAssertEqual(profile.pulses(forLevel: 0, levelCount: 10), [])
+    }
+
+    func testProfileSpreadsAcrossOtherLevelCounts() {
+        let profile = LevelHapticProfile.escalating
+        XCTAssertEqual(profile.pulses(forLevel: 1, levelCount: 5), profile.pulses[0])
+        XCTAssertEqual(profile.pulses(forLevel: 5, levelCount: 5), profile.pulses[9])
+        XCTAssertEqual(profile.pulses(forLevel: 20, levelCount: 20), profile.pulses[9])
+    }
+
     func testConfigurationIsSanitized() {
         var q = PressureQuantizer()
         q.configuration.deadzone = -1

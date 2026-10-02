@@ -6,6 +6,8 @@ struct ContentView: View {
     @State private var circular = false
 
     private var levelCount: Int { model.configuration.levelCount }
+    /// Shows the haptic preview on the loader while it plays.
+    private var displayLevel: Int { max(model.reading.level, model.previewLevel) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -13,10 +15,10 @@ struct ContentView: View {
                 readouts
                 Group {
                     if circular {
-                        CircularSegmentLoader(level: model.reading.level, count: levelCount)
+                        CircularSegmentLoader(level: displayLevel, count: levelCount)
                             .frame(width: 220, height: 220)
                     } else {
-                        LinearSegmentLoader(level: model.reading.level, count: levelCount)
+                        LinearSegmentLoader(level: displayLevel, count: levelCount)
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 230)
@@ -28,15 +30,17 @@ struct ContentView: View {
 
             Divider()
 
-            SettingsPanel(model: model, circular: $circular)
-                .frame(width: 280)
+            ScrollView {
+                SettingsPanel(model: model, circular: $circular)
+            }
+            .frame(width: 300)
         }
         .frame(minHeight: 620)
     }
 
     private var readouts: some View {
         HStack(spacing: 28) {
-            Metric(title: "LEVEL", value: "\(model.reading.level)", suffix: "/ \(levelCount)", large: true)
+            Metric(title: "LEVEL", value: "\(displayLevel)", suffix: "/ \(levelCount)", large: true)
             Metric(title: "RAW", value: String(format: "%.3f", model.reading.raw))
             Metric(title: "NORMALIZED", value: String(format: "%.3f", model.reading.normalized))
             Metric(title: "STAGE", value: "\(model.reading.stage)")
@@ -114,12 +118,40 @@ private struct SettingsPanel: View {
             }
 
             Section(header: Text("Input")) {
-                Picker("Mapping", selection: $model.inputMapping) {
-                    Text("Stage combined").tag(ForceInputMapping.stageCombined)
-                    Text("Raw pressure").tag(ForceInputMapping.raw)
+                Picker("Click", selection: $model.pressureMode) {
+                    Text("Click + force click").tag(PressureMode.twoStage)
+                    Text("Single stage").tag(PressureMode.singleStage)
                 }
-                Toggle("Haptics", isOn: $model.hapticsEnabled)
+                Text(model.pressureMode == .twoStage
+                     ? "macOS adds its own bump at the click and the force click."
+                     : "No force click, so only the click bump comes from macOS.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Section(header: Text("Haptics")) {
+                Toggle("Haptic per level", isOn: $model.hapticsEnabled)
                 Toggle("Haptic on step down", isOn: $model.hapticsOnRelease)
+                Picker("Engine", selection: $model.hapticEngine) {
+                    Text("Trackpad actuator").tag(LevelHaptics.Engine.trackpadActuator)
+                    Text("AppKit").tag(LevelHaptics.Engine.appKit)
+                }
+                Picker("Pattern", selection: $model.hapticProfile) {
+                    Text("Escalating").tag(HapticProfileChoice.escalating)
+                    Text("Same every level").tag(HapticProfileChoice.uniform)
+                }
+                Text(model.isActuatorAvailable
+                     ? "Trackpad actuator ready."
+                     : "Trackpad actuator unavailable. Using AppKit haptics.")
+                    .font(.caption)
+                    .foregroundColor(model.isActuatorAvailable ? .secondary : .orange)
+                Button(model.previewLevel > 0 ? "Playing level \(model.previewLevel)…" : "Preview all 10 levels") {
+                    model.previewHaptics()
+                }
+                .disabled(model.previewLevel > 0)
+                Text("Rest a finger on the trackpad while the preview plays.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section(header: Text("Calibration")) {

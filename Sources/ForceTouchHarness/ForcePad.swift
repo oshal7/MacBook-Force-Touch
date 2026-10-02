@@ -7,6 +7,7 @@ struct ForcePad: NSViewRepresentable {
 
     func makeNSView(context: Context) -> PressureTrackerView {
         let view = PressureTrackerView(frame: .zero)
+        view.haptics = model.haptics
         view.onReading = { [weak model] reading in
             model?.ingest(reading)
         }
@@ -15,8 +16,9 @@ struct ForcePad: NSViewRepresentable {
 
     func updateNSView(_ view: PressureTrackerView, context: Context) {
         view.quantizer.configuration = model.configuration
-        view.inputMapping = model.inputMapping
-        view.haptics.isEnabled = model.hapticsEnabled
-        view.haptics.playsOnRelease = model.hapticsOnRelease
+        view.inputMapping = model.pressureMode.mapping
+        if view.pressureBehavior != model.pressureMode.behavior {
+            view.pressureBehavior = model.pressureMode.behavior
+        }
     }
 }

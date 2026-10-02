@@ -2,23 +2,64 @@ import AppKit
 import ForceTouchKit
 import SwiftUI
 
+/// How clicks in the pad are configured.
+enum PressureMode: String, CaseIterable, Identifiable {
+    /// Normal click + force click. macOS plays its own haptic at both.
+    case twoStage
+    /// Click only, no force click, so only the level haptics play after the click.
+    case singleStage
+
+    var id: String { rawValue }
+
+    var behavior: NSEvent.PressureBehavior {
+        self == .twoStage ? .primaryDefault : .primaryClick
+    }
+
+    var mapping: ForceInputMapping {
+        self == .twoStage ? .stageCombined : .raw
+    }
+}
+
+enum HapticProfileChoice: String, CaseIterable, Identifiable {
+    case escalating
+    case uniform
+
+    var id: String { rawValue }
+
+    var profile: LevelHapticProfile {
+        self == .escalating ? .escalating : .uniform
+    }
+}
+
 @MainActor
 final class HarnessModel: ObservableObject {
     @Published private(set) var reading = PressureReading.idle
     @Published private(set) var latencyMs: Double = 0
     @Published private(set) var peakLevel = 0
+    /// Level being played by the haptic preview, or 0.
+    @Published private(set) var previewLevel = 0
 
     @Published var configuration = QuantizerConfiguration.default
-    @Published var inputMapping = ForceInputMapping.stageCombined
-    @Published var hapticsEnabled = true
-    @Published var hapticsOnRelease = false
+    @Published var pressureMode = PressureMode.twoStage
+    @Published var hapticsEnabled = true { didSet { haptics.isEnabled = hapticsEnabled } }
+    @Published var hapticsOnRelease = false { didSet { haptics.playsOnRelease = hapticsOnRelease } }
+    @Published var hapticEngine = LevelHaptics.Engine.trackpadActuator {
+        didSet { haptics.preferredEngine = hapticEngine }
+    }
+    @Published var hapticProfile = HapticProfileChoice.escalating {
+        didSet { haptics.profile = hapticProfile.profile }
+    }
 
     @Published private(set) var isCalibrating = false
     @Published private(set) var calibrationSecondsLeft = 0
 
+    let haptics = LevelHaptics()
+
     private var calibrator = PressureCalibrator()
     private var calibrationTimer: Timer?
     static let calibrationDuration = 4
+
+    var isActuatorAvailable: Bool { haptics.isActuatorAvailable }
 
     func ingest(_ reading: PressureReading) {
         self.reading = reading
@@ -36,6 +77,12 @@ final class HarnessModel: ObservableObject {
 
     func resetPeak() {
         peakLevel = 0
+    }
+
+    func previewHaptics() {
+        haptics.previewAllLevels(levelCount: configuration.levelCount) { [weak self] level in
+            self?.previewLevel = level
+        }
     }
 
     func startCalibration() {
